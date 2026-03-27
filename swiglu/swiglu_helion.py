@@ -5,8 +5,10 @@ import helion.language as hl
 from helion import Config
 
 
-def _make_helion_kernel():
-    @helion.kernel()
+def _make_helion_kernel(config):
+    # Passing config= to the decorator skips autotuning and compiles directly
+    # with the saved config. See: https://github.com/pytorch/helion/blob/main/README.md
+    @helion.kernel(config=config)
     def k(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
         assert x1.shape == x2.shape
         out = torch.empty_like(x1)
@@ -37,8 +39,6 @@ def swiglu_helion(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
 
     if key not in _kernel_cache:
         cache_path = os.path.join(CACHE_DIR, f"{key}.json")
-        k = _make_helion_kernel()
-        k.set_config(Config.load(cache_path))
-        _kernel_cache[key] = k
+        _kernel_cache[key] = _make_helion_kernel(Config.load(cache_path))
 
     return _kernel_cache[key](x1, x2)
