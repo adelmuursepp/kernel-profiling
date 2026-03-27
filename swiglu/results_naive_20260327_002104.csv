@@ -1,0 +1,6 @@
+kernel,tokens,hidden_dim,dtype,ms,gb_per_s
+naive,2048,4096,float32,0.0619,1626.0
+naive,2048,4096,bfloat16,0.0297,1695.1
+naive,8192,4096,bfloat16,0.1168,1723.5
+naive,8192,8192,bfloat16,0.2244,1794.2
+naive,32768,8192,bfloat16,0.8748,1841.2
