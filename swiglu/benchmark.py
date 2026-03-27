@@ -4,6 +4,7 @@ import cutlass
 from swiglu_pytorch import swiglu_pytorch
 from swiglu_pytorch_compile import swiglu_pytorch_compile
 from swiglu_cutedsl import swiglu_cutedsl
+from swiglu_helion import swiglu_helion
 
 WARMUP = 10
 REPEAT = 100
@@ -47,6 +48,7 @@ if __name__ == "__main__":
         ("pytorch_eager",   swiglu_pytorch),
         ("pytorch_compile", swiglu_pytorch_compile),
         ("cutedsl",         swiglu_cutedsl),
+        ("helion",          swiglu_helion),
     ]
 
     configs = [
