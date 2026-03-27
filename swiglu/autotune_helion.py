@@ -16,10 +16,14 @@ from helion import Config
 def swiglu_helion_autotune(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
     assert x1.shape == x2.shape
     out = torch.empty_like(x1)
+    x1_flat = x1.view(-1)
+    x2_flat = x2.view(-1)
+    out_flat = out.view(-1)
     for tile in hl.tile(x1.numel()):
-        a = x1.view(-1)[tile].to(torch.float32)
-        b = x2.view(-1)[tile].to(torch.float32)
-        out.view(-1)[tile] = (a * torch.sigmoid(a) * b).to(x1.dtype)
+        a = x1_flat[tile].to(torch.float32)
+        b = x2_flat[tile].to(torch.float32)
+        silu_a = a * torch.sigmoid(a)
+        out_flat[tile] = silu_a.to(x1.dtype) * x2_flat[tile]
     return out
 
 
@@ -52,7 +56,7 @@ if __name__ == "__main__":
         x1 = torch.randn(tokens, hidden_dim, device="cuda", dtype=dtype)
         x2 = torch.randn(tokens, hidden_dim, device="cuda", dtype=dtype)
 
-        best_config = swiglu_helion_autotune.autotune(x1, x2)
+        best_config = swiglu_helion_autotune.autotune((x1, x2))
         best_config.save(cache_path)
 
         print(f"  Saved -> {cache_path}")
