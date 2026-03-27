@@ -2,39 +2,29 @@ import torch
 import cutlass
 import cutlass.cute as cute
 from cutlass import Float32, BFloat16, Int32
-from cutlass.cutlass_dsl import T, dsl_user_op
-from cutlass._mlir.dialects import llvm
 from cutlass.cute.runtime import from_dlpack
 
+# cute.math.exp2 is the modern CuteDSL API for fast 2^x (uses ex2.approx.ftz.f32 under the hood).
+# cute.arch.exp2 (PTX inline assembly version) is now deprecated in favour of cute.math.exp2.
+# Reference: https://github.com/NVIDIA/cutlass/blob/main/python/CuTeDSL/cutlass/cute/arch/nvvm_wrappers.py
+# Example of cute.math.exp2 used in Flash Attention:
+# https://github.com/NVIDIA/cutlass/blob/main/examples/python/CuTeDSL/ampere/flash_attention_v2.py
 
-@dsl_user_op
-def silu_f32(x: Float32, *, loc=None, ip=None) -> Float32:
+
+def silu_f32(x: Float32) -> Float32:
     """
-    SiLU(x) = x * sigmoid(x), computed entirely in PTX.
+    SiLU(x) = x * sigmoid(x)
 
     sigmoid(x) = 1 / (1 + exp(-x))
-               = 1 / (1 + 2^(-x * log2(e)))   [since exp(a) = 2^(a * log2(e))]
+               = 1 / (1 + 2^(-x * log2(e)))   [since exp(a) = 2^(a*log2(e))]
 
-    PTX instruction ex2.approx.f32 computes 2^x (fast approximation).
-    -log2(e) = -1.4426950... stored as IEEE 754 hex: 0fBFB8AA3B
-    1.0 stored as IEEE 754 hex: 0f3F800000
+    cute.math.exp2(a, fastmath=True) computes 2^a using the GPU's fast
+    ex2.approx.ftz.f32 hardware instruction.
     """
-    return Float32(
-        llvm.inline_asm(
-            T.f32(),
-            [Float32(x).ir_value(loc=loc, ip=ip)],
-            # $0 = output register, $1 = input x (read-only)
-            "mul.f32 $0, $1, 0fBFB8AA3B;\n\t"  # $0 = -x * log2(e)
-            "ex2.approx.f32 $0, $0;\n\t"        # $0 = 2^(-x*log2e) = exp(-x)
-            "add.f32 $0, $0, 0f3F800000;\n\t"   # $0 = 1 + exp(-x)
-            "rcp.approx.f32 $0, $0;\n\t"        # $0 = sigmoid(x)
-            "mul.f32 $0, $0, $1;",              # $0 = x * sigmoid(x) = silu(x)
-            "=&f,f",
-            has_side_effects=False,
-            is_align_stack=False,
-            asm_dialect=llvm.AsmDialect.AD_ATT,
-        )
-    )
+    LOG2_E = Float32(1.4426950408889634)
+    exp_neg_x = cute.math.exp2(x * Float32(-1.0) * LOG2_E, fastmath=True)
+    sigmoid_x = Float32(1.0) / (Float32(1.0) + exp_neg_x)
+    return x * sigmoid_x
 
 
 @cute.kernel
