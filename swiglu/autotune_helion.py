@@ -52,7 +52,7 @@ if __name__ == "__main__":
         x1 = torch.randn(tokens, hidden_dim, device="cuda", dtype=dtype)
         x2 = torch.randn(tokens, hidden_dim, device="cuda", dtype=dtype)
 
-        best_config = swiglu_helion_autotune.autotune(x1, x2)
+        best_config = swiglu_helion_autotune.autotune((x1, x2))
         best_config.save(cache_path)
 
         print(f"  Saved -> {cache_path}")
