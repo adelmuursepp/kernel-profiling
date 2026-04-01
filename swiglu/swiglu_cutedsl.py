@@ -3,7 +3,9 @@ import cutlass
 import cutlass.cute as cute
 from cutlass import Float32, BFloat16
 from cutlass.cute.runtime import from_dlpack
-import cutlass.cute.sm90_utils as sm90_utils
+import cutlass.utils.hopper_helpers as sm90_utils
+from cutlass.cute.nvgpu.warpgroup.mma import OperandMajorMode
+from cutlass.utils.layout import LayoutEnum
 
 #Activation function
 def silu_f32(x: Float32) -> Float32:
@@ -23,21 +25,23 @@ class SwiGLUHopperNoPipeline:
         self.tile_n = tile_n # constrained by instruction below to 128
         self.tile_k = tile_k
 
-        # Major.K for both will do transpose during matmul internally
+        # OperandMajorMode.K: K is contiguous (row-major, K is fast dim)
+        # atom_layout_mnk=(1,1,1): one warpgroup per block
         self.tiled_mma = sm90_utils.make_trivial_tiled_mma(
-            cute.SM90_64x128x16_F32BF16BF16_SS(
-                cute.GMMA.Major.K, cute.GMMA.Major.K
-            ),
-            # standard warps layout: cooperate on columns but handle diff rows
-            warp_group_thread_layout=cute.make_layout((4,1)),
+            BFloat16,               # a_dtype
+            BFloat16,               # b_dtype
+            OperandMajorMode.K,     # X is [tokens, d_model], K contiguous
+            OperandMajorMode.K,     # W is [hidden_dim, d_model], K contiguous
+            Float32,                # acc_dtype
+            (1, 1, 1),              # atom_layout_mnk: one warpgroup per CTA
+            tiler_mn=(self.tile_m, self.tile_n),
         )
-        # swizzle, informed by the mma instruction for spreading across banks
-        # for X
-        self.smem_layout_a = sm90_utils.make_smem_layout_a(self.tiled_mma,
-            (tile_m, tile_k), cute.BF16)
-        # for W1/W2
-        self.smem_layout_b = sm90_utils.make_smem_layout_b(self.tiled_mma,
-            (self.tile_n, self.tile_k), cute.BF16)
+        # swizzled smem layouts for WGMMA bank conflict avoidance
+        # mma_tiler_mnk is full (M, N, K) tile, num_stages=1 (no pipeline)
+        self.smem_layout_a = sm90_utils.make_smem_layout_a(
+            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
+        self.smem_layout_b = sm90_utils.make_smem_layout_b(
+            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
 
 
     @cute.jit
@@ -139,7 +143,7 @@ class SwiGLUHopperNoPipeline:
             tOut[i] = BFloat16(silu_f32(gate_acc[i]) * up_acc[i])
 
 
-# ── Python wrapper ────────────────────────────────────────────────────────────
+# Wrapper for running
 
 _kernel_cache = {}
 
