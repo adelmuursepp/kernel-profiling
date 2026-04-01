@@ -24,24 +24,9 @@ class SwiGLUHopperNoPipeline:
         self.tile_m = tile_m # constrained by the instruction below to 64
         self.tile_n = tile_n # constrained by instruction below to 128
         self.tile_k = tile_k
-
-        # OperandMajorMode.K: K is contiguous (row-major, K is fast dim)
-        # atom_layout_mnk=(1,1,1): one warpgroup per block
-        self.tiled_mma = sm90_utils.make_trivial_tiled_mma(
-            BFloat16,               # a_dtype
-            BFloat16,               # b_dtype
-            OperandMajorMode.K,     # X is [tokens, d_model], K contiguous
-            OperandMajorMode.K,     # W is [hidden_dim, d_model], K contiguous
-            Float32,                # acc_dtype
-            (1, 1, 1),              # atom_layout_mnk: one warpgroup per CTA
-            tiler_mn=(self.tile_m, self.tile_n),
-        )
-        # swizzled smem layouts for WGMMA bank conflict avoidance
-        # mma_tiler_mnk is full (M, N, K) tile, num_stages=1 (no pipeline)
-        self.smem_layout_a = sm90_utils.make_smem_layout_a(
-            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
-        self.smem_layout_b = sm90_utils.make_smem_layout_b(
-            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
+        # tiled_mma and smem layouts are created inside __call__ because
+        # make_trivial_tiled_mma is an MLIR op that needs the context
+        # established by cute.compile — calling it in __init__ has no context
 
 
     @cute.jit
@@ -53,6 +38,18 @@ class SwiGLUHopperNoPipeline:
             mOut: cute.Tensor, 
             stream,
             ):
+        # setup here so make_trivial_tiled_mma runs inside cute.compile's MLIR context
+        tiled_mma = sm90_utils.make_trivial_tiled_mma(
+            BFloat16, BFloat16,
+            OperandMajorMode.K, OperandMajorMode.K,
+            Float32, (1, 1, 1),
+            tiler_mn=(self.tile_m, self.tile_n),
+        )
+        smem_layout_a = sm90_utils.make_smem_layout_a(
+            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
+        smem_layout_b = sm90_utils.make_smem_layout_b(
+            LayoutEnum.ROW_MAJOR, (self.tile_m, self.tile_n, self.tile_k), BFloat16, 1)
+
         tokens = mX.shape[0]
         hidden_dim = mW1.shape[0]
 
@@ -72,9 +69,9 @@ class SwiGLUHopperNoPipeline:
         # instantiate and launch
         self.kernel(
                 mX, mW1, mW2, mOut,
-                self.tiled_mma, 
-                self.smem_layout_a, self.smem_layout_b, 
-                self.tile_m, self.tile_n, self.tile_k, 
+                tiled_mma,
+                smem_layout_a, smem_layout_b,
+                self.tile_m, self.tile_n, self.tile_k,
         ).launch(grid=grid, block=block, smem=smem_bytes, stream=stream)
 
     @cute.kernel
