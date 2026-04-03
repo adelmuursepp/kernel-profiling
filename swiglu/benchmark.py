@@ -62,6 +62,7 @@ def benchmark(fn, tokens, d_model, hidden_dim, dtype):
 
 if __name__ == "__main__":
     import csv
+    import os
     from datetime import datetime
 
     cutlass.cuda.initialize_cuda_context()
@@ -78,8 +79,10 @@ if __name__ == "__main__":
         ("helion",                   swiglu_helion),
     ]
 
+    results_dir = os.path.join(os.path.dirname(__file__), "results")
+    os.makedirs(results_dir, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"results_{timestamp}.csv"
+    filename = os.path.join(results_dir, f"results_{timestamp}.csv")
 
     with open(filename, "w", newline="") as f:
         writer = csv.writer(f)

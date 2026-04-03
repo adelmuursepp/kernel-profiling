@@ -6,6 +6,12 @@ Output files:
 """
 
 import os
+
+# Run each autotune candidate in a subprocess so a crashing config (e.g.
+# cudaErrorIllegalAddress or PTXAS register overflow) doesn't kill the whole
+# tuner. The best non-crashing config still gets saved.
+os.environ.setdefault("HELION_AUTOTUNE_PRECOMPILE", "spawn")
+
 import torch
 import helion
 from common import MATMUL_CONFIGS, config_key, swiglu_kernel_fn
