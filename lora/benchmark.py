@@ -34,11 +34,11 @@ def validate(fn, tokens, in_dim, out_dim, rank, dtype, atol=0.1):
 
     out = fn(x, W, A, B)
 
-    # Reference: compute in float32 for numerical stability
-    expected = (
-        x.float() @ W.float().T
-        + x.float() @ B.float().T @ A.float().T
-    ).to(dtype)
+    # Reference: pytorch eager in BF16, same precision as all kernels.
+    # Pure FP32 reference diverges from BF16 kernels at large dims because
+    # intermediate BF16 rounding compounds, causing large absolute errors
+    # even when the kernel is correct (same lesson as swiglu benchmark).
+    expected = lora_pytorch(x, W, A, B)
 
     diff    = (out.float() - expected.float()).abs()
     max_err = diff.max().item()
