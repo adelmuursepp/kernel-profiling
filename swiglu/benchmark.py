@@ -27,6 +27,25 @@ def time_kernel(fn, *args):
     return ms
 
 
+def validate(fn, tokens, d_model, hidden_dim, dtype, atol=0.1):
+    torch.manual_seed(0)
+    x  = torch.randn(tokens,     d_model,     device="cuda", dtype=dtype)
+    w1 = torch.randn(hidden_dim, d_model,     device="cuda", dtype=dtype)
+    w2 = torch.randn(hidden_dim, d_model,     device="cuda", dtype=dtype)
+
+    out = fn(x, w1, w2)
+
+    gate     = x.float() @ w1.T.float()
+    up       = x.float() @ w2.T.float()
+    expected = (torch.nn.functional.silu(gate) * up).to(dtype)
+
+    diff    = (out.float() - expected.float()).abs()
+    max_err = diff.max().item()
+    n_wrong = (diff >= atol).sum().item()
+    passed  = n_wrong == 0
+    return passed, max_err, n_wrong
+
+
 def benchmark(fn, tokens, d_model, hidden_dim, dtype):
     x  = torch.randn(tokens,     d_model, device="cuda", dtype=dtype)
     w1 = torch.randn(hidden_dim, d_model, device="cuda", dtype=dtype)
@@ -66,15 +85,17 @@ if __name__ == "__main__":
         writer = csv.writer(f)
         writer.writerow(["kernel", "tokens", "d_model", "hidden_dim", "dtype", "ms", "gb_per_s"])
 
-        print(f"{'kernel':>10} {'tokens':>8} {'d_model':>8} {'hidden':>8} {'dtype':>10} {'ms':>10} {'GB/s':>10}")
-        print("-" * 72)
+        print(f"{'kernel':>10} {'tokens':>8} {'d_model':>8} {'hidden':>8} {'dtype':>10} {'ms':>10} {'GB/s':>10} {'valid':>8}")
+        print("-" * 82)
 
         for kernel_name, fn in kernels:
             for tokens, d_model, hidden_dim, dtype in MATMUL_CONFIGS:
+                passed, max_err, n_wrong = validate(fn, tokens, d_model, hidden_dim, dtype)
                 ms, gb_per_s = benchmark(fn, tokens, d_model, hidden_dim, dtype)
                 dtype_str = str(dtype).split(".")[-1]
-                writer.writerow([kernel_name, tokens, d_model, hidden_dim, dtype_str, f"{ms:.4f}", f"{gb_per_s:.1f}"])
-                print(f"{kernel_name:>10} {tokens:>8} {d_model:>8} {hidden_dim:>8} {dtype_str:>10} {ms:>10.4f} {gb_per_s:>10.1f}")
+                valid_str = "OK" if passed else f"FAIL(max={max_err:.3f},n={n_wrong})"
+                writer.writerow([kernel_name, tokens, d_model, hidden_dim, dtype_str, f"{ms:.4f}", f"{gb_per_s:.1f}", valid_str])
+                print(f"{kernel_name:>10} {tokens:>8} {d_model:>8} {hidden_dim:>8} {dtype_str:>10} {ms:>10.4f} {gb_per_s:>10.1f} {valid_str:>8}")
 
     print(f"\nResults saved to {filename}")
 
