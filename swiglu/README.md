@@ -1,12 +1,12 @@
 # SwiGLU Kernel Profiling
 
-Compares implementations of the SwiGLU activation (`SiLU(x1) * x2`) on H100 GPUs.
+Compares implementations of the SwiGLU kernel  (`SiLU(xW1) * xW2`) on H100 GPUs.
 
 ## Kernels
 
 | File | Name in results | Description |
 |------|----------------|-------------|
-| `swiglu_pytorch.py` | `pytorch_eager` | Naive PyTorch unfused, 5 memory passes |
+| `swiglu_pytorch.py` | `pytorch_eager` | Naive PyTorch unfused |
 | `swiglu_pytorch_compile.py` | `pytorch_compile` | `torch.compile` auto-fused by Inductor |
 | `autotune_helion.py` | `helion` | Helion DSL. Fused, autotuned tile config |
 | `swiglu_cutedsl.py` | `cutedsl` | CuteDSL simple |
@@ -25,7 +25,3 @@ Compares implementations of the SwiGLU activation (`SiLU(x1) * x2`) on H100 GPUs
 
 
 
-
-## TODO
-
-- [ ] Check accuracy of Helion and CuteDSL outputs against PyTorch baseline
