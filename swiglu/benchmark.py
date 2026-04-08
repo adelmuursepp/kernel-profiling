@@ -1,31 +1,14 @@
 import torch
-import torch.nn.functional as F
-import cutlass
+import triton
+
+# Kernel imports
 from swiglu_pytorch import swiglu_pytorch
 from swiglu_pytorch_compile import swiglu_pytorch_compile_separate, swiglu_pytorch_compile_stacked
 from swiglu_cutedsl import swiglu_cutedsl
 from swiglu_cutedsl_pipelined import swiglu_cutedsl_pipelined
 from swiglu_helion_inference import swiglu_helion
+
 from common import MATMUL_CONFIGS
-
-WARMUP = 10
-REPEAT = 100
-
-def time_kernel(fn, *args):
-    for _ in range(WARMUP):
-        fn(*args)
-
-    start = torch.cuda.Event(enable_timing=True)
-    end = torch.cuda.Event(enable_timing=True)
-
-    start.record()
-    for _ in range(REPEAT):
-        fn(*args)
-    end.record()
-
-    torch.cuda.synchronize()
-    ms = start.elapsed_time(end) / REPEAT
-    return ms
 
 
 def validate(fn, tokens, d_model, hidden_dim, dtype):
@@ -34,23 +17,24 @@ def validate(fn, tokens, d_model, hidden_dim, dtype):
     w1 = torch.randn(hidden_dim, d_model,     device="cuda", dtype=dtype)
     w2 = torch.randn(hidden_dim, d_model,     device="cuda", dtype=dtype)
 
+    # Function to benchmark
     out = fn(x, w1, w2)
 
-    # Reference: pytorch eager in BF16, same precision as all kernels.
-    # Pure FP32 reference (x.float() @ w.T.float()) diverges from BF16 kernels
-    # at large hidden dims because intermediate BF16 rounding compounds through
-    # silu*up, causing large absolute errors even when the kernel is correct.
-    expected = swiglu_pytorch(x, w1, w2)
+    # Reference: computation in FP32
+    xf, w1f, w2f = x.float(), w1.float(), w2.float()
+    gate = xf @ w1f.T
+    up = xf @ w2f.T
+    # torch.sigmoid operates on fp32
+    expected = (gate * torch.sigmoid(gate) * up).float()
 
     out_f      = out.float()
-    expected_f = expected.float()
-    diff       = (out_f - expected_f).abs()
+    diff       = (out_f - expected).abs()
     max_abs    = diff.max().item()
-    max_rel    = (diff / (expected_f.abs().clamp(min=1.0))).max().item()
-    mean_rel   = (diff / (expected_f.abs().clamp(min=1.0))).mean().item()
+    max_rel    = (diff / (expected.abs().clamp(min=1.0))).max().item()
+    mean_rel   = (diff / (expected.abs().clamp(min=1.0))).mean().item()
     # clamp denominator at 1.0 so near-zero reference values don't blow up
     # relative error. rtol=0.1 accommodates FP accumulation order differences
-    # between kernels (cutedsl max_rel ~6.9%, helion mean_rel ~0.27%).
+    # between kernels 
     return max_abs, max_rel, mean_rel
 
 
@@ -59,7 +43,7 @@ def benchmark(fn, tokens, d_model, hidden_dim, dtype):
     w1 = torch.randn(hidden_dim, d_model, device="cuda", dtype=dtype)
     w2 = torch.randn(hidden_dim, d_model, device="cuda", dtype=dtype)
 
-    ms = time_kernel(fn, x, w1, w2)
+    ms = triton.testing.do_bench(lambda: fn(x, w1, w2))
 
     # reads: x [tokens, d_model], w1 [hidden_dim, d_model], w2 [hidden_dim, d_model]
     # write: out [tokens, hidden_dim]
@@ -72,8 +56,6 @@ if __name__ == "__main__":
     import csv
     import os
     from datetime import datetime
-
-    cutlass.cuda.initialize_cuda_context()
 
     def swiglu_compile_stacked(x, w1, w2):
         W = torch.cat([w1, w2], dim=0)

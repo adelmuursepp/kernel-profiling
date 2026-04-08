@@ -14,7 +14,8 @@ os.environ.setdefault("HELION_AUTOTUNE_PRECOMPILE", "spawn")
 
 import torch
 import helion
-from common import MATMUL_CONFIGS, config_key, swiglu_kernel_fn
+from common import MATMUL_CONFIGS
+from helion_common import config_key, swiglu_kernel_fn
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "autotune_cache")
 
