@@ -6,7 +6,7 @@ from swiglu_pytorch import swiglu_pytorch
 from swiglu_pytorch_compile import swiglu_pytorch_compile_separate, swiglu_pytorch_compile_stacked
 from swiglu_cutedsl import swiglu_cutedsl
 from swiglu_cutedsl_pipelined import swiglu_cutedsl_pipelined
-from swiglu_helion_inference import swiglu_helion
+from swiglu_helion_inference import swiglu_helion_dot, swiglu_helion_addmm
 
 from common import MATMUL_CONFIGS
 
@@ -67,7 +67,8 @@ if __name__ == "__main__":
         ("pytorch_compile_stacked",  swiglu_compile_stacked),
         ("cutedsl",                  swiglu_cutedsl),
         ("cutedsl_pipelined",        swiglu_cutedsl_pipelined),
-        ("helion",                   swiglu_helion),
+        ("helion_dot",               swiglu_helion_dot),
+        ("helion_addmm",             swiglu_helion_addmm),
     ]
 
     results_dir = os.path.join(os.path.dirname(__file__), "results")
