@@ -2,6 +2,7 @@
 import os
 import torch
 import helion
+import triton.testing
 from common import ATTENTION_CONFIGS
 from helion_common import config_key, VARIANTS
 
@@ -49,9 +50,11 @@ if __name__ == "__main__":
             except Exception as e:
                 print(f"  Could not save Triton code: {e}")
 
-            # Then actually run it to trigger the crash
+            # Tried just running using Helion and with Triton benchmarking (similar to when Helion runs it)
             try:
-                helion.kernel(config=config_for_repro, static_shapes=True)(kernel_fn)(q, k, v)
-                print(f"  Ran successfully (no crash)")
+                bound_kernel = helion.kernel(config=config_for_repro, static_shapes=True)(kernel_fn)
+                bound_kernel(q, k, v)  # single warmup to catch obvious compile errors first
+                ms = triton.testing.do_bench(lambda: bound_kernel(q, k, v))
+                print(f"  Ran successfully (no crash), {ms:.3f} ms")
             except Exception as e:
-                print(f"  Crashed on GPU run: {e}")
+                print(f"  Crashed during benchmarking: {e}")
