@@ -37,8 +37,9 @@ if __name__ == "__main__":
             W = torch.randn(out_dim, in_dim,  device="cuda", dtype=dtype)
             A = torch.randn(out_dim, rank,    device="cuda", dtype=dtype)
             B = torch.randn(rank,    in_dim,  device="cuda", dtype=dtype)
+            xA = x @ B.T  # pre-compute outside helion kernel
 
-            best_config = helion.kernel()(kernel_fn).autotune((x, W, A, B))
+            best_config = helion.kernel()(kernel_fn).autotune((x, W, A, xA))
             best_config.save(cache_path)
 
             print(f"  Saved -> {cache_path}")

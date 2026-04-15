@@ -2,11 +2,12 @@
 #SBATCH --job-name=lora_autotune
 #SBATCH --partition=gpubase_bygpu_b2
 #SBATCH --gres=gpu:h100:1
-#SBATCH --mem=16G
-#SBATCH --time=0-04:00
+#SBATCH --mem=64G
+#SBATCH --time=0-05:00
 #SBATCH --output=logs/%x_%j.out
 #SBATCH --error=logs/%x_%j.err
 
+export HELION_AUTOTUNE_COMPILE_TIMEOUT=800
 export HELION_AUTOTUNE_PRECOMPILE=spawn
 mkdir -p logs
 
