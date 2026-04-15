@@ -10,6 +10,7 @@
 mkdir -p logs
 
 module load apptainer
+source ../../../add_path.sh
 
 apptainer exec --nv ~/apptainer.sandbox python3.12 benchmark.py
 

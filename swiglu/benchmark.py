@@ -39,8 +39,7 @@ def _get_fused_compiled(m, n, k):
         w_fake = make_fake_tensor(dtype, (n, k), div)
         v_fake = make_fake_tensor(dtype, (n, k), div)
         o_fake = make_fake_tensor(dtype, (m, n), divn)
-        # make_fake_stream with use_tvm_ffi_env_stream=True bakes the CUDA
-        # stream in via TVM FFI; compiled kernel is called without explicit stream.
+
         _fused_compile_cache[key] = cute.compile(
             gemm,
             x_fake, w_fake, v_fake, o_fake,
@@ -81,6 +80,7 @@ if __name__ == "__main__":
     import os
     from datetime import datetime
 
+    # TODO: think if this wrapper approach is wrong for stacked and modify with optional inputs in others
     def swiglu_compile_stacked(x, w1, w2):
         W = torch.cat([w1, w2], dim=0)
         return swiglu_pytorch_compile_stacked(x, W)

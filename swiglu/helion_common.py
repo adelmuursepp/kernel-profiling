@@ -14,8 +14,9 @@ def swiglu_kernel_fn_dot(x: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor) ->
         gate_acc = hl.zeros([tile_i, tile_j], dtype=torch.float32)
         up_acc   = hl.zeros([tile_i, tile_j], dtype=torch.float32)
         for tile_k in hl.tile(x.shape[1]):
-            gate_acc = hl.dot(x[tile_i, tile_k], w1[tile_j, tile_k].T, acc=gate_acc)
-            up_acc   = hl.dot(x[tile_i, tile_k], w2[tile_j, tile_k].T, acc=up_acc)
+            x_tile = x[tile_i, tile_k]
+            gate_acc = hl.dot(x_tile, w1[tile_j, tile_k].T, acc=gate_acc)
+            up_acc   = hl.dot(x_tile, w2[tile_j, tile_k].T, acc=up_acc)
         silu_gate = gate_acc * torch.sigmoid(gate_acc)
         out[tile_i, tile_j] = (silu_gate * up_acc).to(x.dtype)
     return out
@@ -29,6 +30,7 @@ def swiglu_kernel_fn_addmm(x: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor) 
         gate_acc = hl.zeros([tile_i, tile_j], dtype=torch.float32) 
         up_acc = hl.zeros([tile_i, tile_j], dtype=torch.float32)
         for tile_k in hl.tile(x.shape[1]):
+            # TODO: actually needs again autotuning for only loading x once like above
             gate_acc = torch.addmm(gate_acc, x[tile_i, tile_k], w1[tile_j, tile_k].T)
             up_acc = torch.addmm(up_acc, x[tile_i, tile_k], w2[tile_j, tile_k].T)
         silu_gate = gate_acc * torch.sigmoid(gate_acc)
