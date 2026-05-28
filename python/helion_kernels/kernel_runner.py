@@ -32,6 +32,9 @@ def autotune_helion_kernel(kernel_fn, label, shapes_iter):
 
 
 class HelionKernel:
+    """
+    Helps automatically designate kernel label, etc.
+    """
     def __init__(self, fn, label):
         self.fn = fn
         self.label = label
@@ -69,12 +72,10 @@ class HelionKernel:
         compiled_fn = helion.kernel(config=Config.load(cache_path))(self.fn)
         return compiled_fn
     
-    def get_config(self, *tensors):
-        key = self._tensors_to_key(self, *tensors)
-        cache_path = _get_cache_path(self.label, key)
-        return Config.load(cache_path) if os.path.exists(cache_path) else None
-    
     def dump_ir(self, compiled_kernel, sample_args):
+        """
+        Dumps IR to ir_dumps/{self.label}/(triton, ttir, etc.)
+        """
         dump_ir(self.label, compiled_kernel, sample_args, self._tensors_to_key(*sample_args))
 
 RMSNormLinear = HelionKernel(rmsnorm_lin_kernel, 'rmsnorm_lin')
