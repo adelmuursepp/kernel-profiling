@@ -2,7 +2,7 @@ import os
 import torch
 import helion
 from helion import Config
-from .helion_kernels import rmsnorm_lin_kernel, swiglu_kernel, lora_kernel
+from .helion_kernels import rmsnorm_lin_kernel, swiglu_kernel, lora_kernel, matmul_kernel
 from .dump_ir import dump_ir
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "autotune_cache")
@@ -15,10 +15,16 @@ def autotune_helion_kernel_single(kernel_fn, label, key, tensors):
     if os.path.exists(cache_path):
         print(f'Skipping {key} (cache exists)')
         return
-    os.makedirs(os.path.join(CACHE_DIR, label))
+    os.makedirs(os.path.join(CACHE_DIR, label), exist_ok=True)
 
     print(f"Autotuning {key}")
-    best_config = helion.kernel()(kernel_fn).autotune(tensors)
+    # this was used in the matmul example https://github.com/pytorch/helion/blob/main/examples/matmul.py
+    # static shapes gives perf boost
+    # tl.dot is pipelined with num_stages
+    hk = helion.kernel(
+        static_shapes=True,
+        )
+    best_config = hk(kernel_fn).autotune(tensors)
     best_config.save(cache_path)
     print(f"Saved -> {cache_path}")
 
@@ -78,6 +84,7 @@ class HelionKernel:
         """
         dump_ir(self.label, compiled_kernel, sample_args, self._tensors_to_key(*sample_args))
 
+Matmul = HelionKernel(matmul_kernel, 'matmul')
 RMSNormLinear = HelionKernel(rmsnorm_lin_kernel, 'rmsnorm_lin')
 SwiGLU = HelionKernel(swiglu_kernel, 'swiglu')
 LoRA = HelionKernel(lora_kernel, 'LoRA')
