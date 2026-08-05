@@ -11,6 +11,7 @@ def rmsnorm_lin_kernel(
     performs rmsnorm(x) y
     x is (m, k), y is (k, n)
     """
+    y = y.t()
     m, k = x.size()
     k2, n = y.size()
     out = torch.empty(
@@ -35,9 +36,11 @@ def rmsnorm_lin_kernel(
 def swiglu_kernel(x: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor) -> torch.Tensor:
     """
     performs swiglu
+    expects (m, k), (n, k), (n, k) inputs
     x is (m, k)
     w1, w2 are (k, n)
     """
+    w1, w2 = w1.t(), w2.t()
     m = x.shape[0]
     n = w1.shape[1]
     out = torch.empty((m, n), dtype=x.dtype, device=x.device)
@@ -53,6 +56,7 @@ def swiglu_kernel(x: torch.Tensor, w1: torch.Tensor, w2: torch.Tensor) -> torch.
         out[tile_i, tile_j] = (silu_gate * up_acc).to(x.dtype)
     return out
 
+# TODO untested
 def lora_kernel(
     x: torch.Tensor,
     W: torch.Tensor,
@@ -63,13 +67,15 @@ def lora_kernel(
     Computes xW * (xA)B
 
     x: m, k
-    w: k, n
-    A: k, lora_dim
-    B: lora_dim, n
+    w: n, k --> k, n
+    A: lora_dim, k --> k, lora_dim
+    B: n, lora_dim --> lora_dim, n
     """
+    w = w.t()
+    B = B.t()
     m, k = x.shape
     n = W.shape[1]
-    xA = x @ A # m x lora_dim
+    xA = x @ A.t() # m, lora_dim
     out = torch.empty(m, n, dtype=x.dtype, device=x.device)
     
     for tile_i, tile_j in hl.tile([m, n]):
