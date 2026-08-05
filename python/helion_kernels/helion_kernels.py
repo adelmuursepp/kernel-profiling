@@ -1,12 +1,12 @@
 import torch
 import helion.language as hl
+from collections.abc import Callable
 
 
 def matmul_kernel(
-    x: Tensor,
-    y: Tensor,
-    epilogue: Callable[[Tensor, tuple[Tensor, ...]], Tensor] = lambda acc, tile: acc,
-) -> Tensor:
+    x: torch.Tensor,
+    y: torch.Tensor,
+) -> torch.Tensor:
     """
     Performs matrix multiplication of x and y with an optional epilogue function.
     Args:
@@ -28,7 +28,7 @@ def matmul_kernel(
         acc = hl.zeros([tile_m, tile_n], dtype=torch.float32)
         for tile_k in hl.tile(k):
             acc = torch.addmm(acc, x[tile_m, tile_k], y[tile_k, tile_n])
-        out[tile_m, tile_n] = epilogue(acc, (tile_m, tile_n))
+        out[tile_m, tile_n] = acc
     return out
 
 

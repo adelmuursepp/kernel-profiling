@@ -15,7 +15,7 @@ def autotune_helion_kernel_single(kernel_fn, label, key, tensors):
     if os.path.exists(cache_path):
         print(f'Skipping {key} (cache exists)')
         return
-    os.makedirs(os.path.join(CACHE_DIR, label))
+    os.makedirs(os.path.join(CACHE_DIR, label), exist_ok=True)
 
     print(f"Autotuning {key}")
     # this was used in the matmul example https://github.com/pytorch/helion/blob/main/examples/matmul.py
@@ -23,10 +23,6 @@ def autotune_helion_kernel_single(kernel_fn, label, key, tensors):
     # tl.dot is pipelined with num_stages
     hk = helion.kernel(
         static_shapes=True,
-        autotune_config_overrides={
-            "range_unroll_factors": [0, 0],
-            "range_num_stages": [0, 0],
-        }
         )
     best_config = hk(kernel_fn).autotune(tensors)
     best_config.save(cache_path)
