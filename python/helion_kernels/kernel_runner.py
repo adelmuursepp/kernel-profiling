@@ -18,7 +18,17 @@ def autotune_helion_kernel_single(kernel_fn, label, key, tensors):
     os.makedirs(os.path.join(CACHE_DIR, label))
 
     print(f"Autotuning {key}")
-    best_config = helion.kernel()(kernel_fn).autotune(tensors)
+    # this was used in the matmul example https://github.com/pytorch/helion/blob/main/examples/matmul.py
+    # static shapes gives perf boost
+    # tl.dot is pipelined with num_stages
+    hk = helion.kernel(
+        static_shapes=True,
+        autotune_config_overrides={
+            "range_unroll_factors": [0, 0],
+            "range_num_stages": [0, 0],
+        }
+        )
+    best_config = hk(kernel_fn).autotune(tensors)
     best_config.save(cache_path)
     print(f"Saved -> {cache_path}")
 
