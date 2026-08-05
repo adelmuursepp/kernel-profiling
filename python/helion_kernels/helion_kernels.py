@@ -2,7 +2,7 @@ import torch
 import helion.language as hl
 
 
-def matmul(
+def matmul_kernel(
     x: Tensor,
     y: Tensor,
     epilogue: Callable[[Tensor, tuple[Tensor, ...]], Tensor] = lambda acc, tile: acc,
@@ -17,6 +17,7 @@ def matmul(
     Returns:
         Tensor: Resulting matrix of shape [m, n].
     """
+    y = y.t()
     m, k = x.size()
     k2, n = y.size()
     assert k == k2, f"size mismatch {k} != {k2}"

@@ -2,7 +2,7 @@ import os
 import torch
 import helion
 from helion import Config
-from .helion_kernels import rmsnorm_lin_kernel, swiglu_kernel, lora_kernel
+from .helion_kernels import rmsnorm_lin_kernel, swiglu_kernel, lora_kernel, matmul_kernel
 from .dump_ir import dump_ir
 
 CACHE_DIR = os.path.join(os.path.dirname(__file__), "autotune_cache")
@@ -88,6 +88,7 @@ class HelionKernel:
         """
         dump_ir(self.label, compiled_kernel, sample_args, self._tensors_to_key(*sample_args))
 
+Matmul = HelionKernel(matmul_kernel, 'matmul')
 RMSNormLinear = HelionKernel(rmsnorm_lin_kernel, 'rmsnorm_lin')
 SwiGLU = HelionKernel(swiglu_kernel, 'swiglu')
 LoRA = HelionKernel(lora_kernel, 'LoRA')
